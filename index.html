@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vídeo 360° Armario de STYLIA</title>
+    <link rel="icon" type="image/png" href="https://github.com/RA8155/STYLIA/blob/main/Stylia%20Logo.jpg?raw=true">
+    <!-- Configuración y Carga de Tailwind CSS para estilos -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Configuración de Tailwind para definir un color dorado personalizado
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        // Color dorado transformado a #daa520
+                        'custom-gold': '#daa520',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Carga de Three.js y OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <style>
+        /* Estilos personalizados */
+        body { margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
+        canvas { display: block; }
+        /* El contenedor 3D debe ocupar toda la vista */
+        #container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        /* Ocultar el cursor mientras se arrastra la vista */
+        .grabbing { cursor: grabbing; }
+    </style>
+</head>
+<!-- CAMBIO: Fondo a transparente (bg-transparent) -->
+<body class="bg-transparent text-gray-900">
+
+    <!-- Contenedor para el renderizador Three.js -->
+    <div id="container" class="relative"></div>
+
+    <!-- Imagen en la esquina superior derecha del visor (visible después de quitar el overlay) -->
+    <!-- Se inicializa con opacity-0 y se hace visible con JS al hacer clic en Reproducir -->
+    <div id="image-overlay" class="absolute top-4 right-4 z-20 transition-opacity duration-500 opacity-0 pointer-events-none">
+        <!-- El color del placeholder de la imagen se ha cambiado a #daa520 -->
+        <img src="https://github.com/RA8155/STYLIA/blob/main/Stylia%20Logo.jpg?raw=true" 
+             alt="Logo Stylia" 
+             class="rounded-lg shadow-xl w-24 h-24 object-cover" 
+             onerror="this.onerror=null;this.src='https://placehold.co/100x100/1F2937/daa520?text=Logo';"
+             >
+    </div>
+
+    <!-- Overlay de Instrucciones y Botón de Inicio -->
+    <!-- CAMBIO: El fondo ahora es bg-transparent, dejando solo visible la caja de instrucciones -->
+    <div id="overlay" class="absolute inset-0 z-30 flex items-center justify-center bg-transparent transition-opacity duration-500">
+        <!-- CAMBIO: Fondo de la caja a blanco (bg-white) y texto del párrafo a oscuro (text-gray-900) -->
+        <div class="p-8 bg-white rounded-xl shadow-2xl max-w-lg text-center border-4 border-custom-gold">
+            <!-- Título en color dorado -->
+            <h1 class="text-4xl font-extrabold mb-4 text-custom-gold tracking-wider">Armario STYLIA</h1>
+            
+            <!-- CAMBIO: El texto ahora es oscuro (text-gray-900) para ser legible sobre el fondo blanco -->
+            <p class="mb-8 text-lg font-medium text-gray-900">
+                Haz clic en “Reproducir” para ver cómo es el armario STYLIA por dentro. Una vez que comience la reproducción, arrastra el ratón o el dedo para mirar alrededor.
+            </p>
+            
+            <!-- Botón de Reproducir en color dorado (se mantiene el texto en gris-900 que es casi negro) -->
+            <button id="playButton" class="px-8 py-3 bg-custom-gold hover:bg-yellow-600 text-gray-900 font-bold text-lg rounded-full transition duration-300 shadow-xl transform hover:scale-105 active:scale-95 ring-4 ring-custom-gold ring-opacity-50">
+                Reproducir
+            </button>
+            <p id="errorMsg" class="mt-4 text-red-400 font-semibold hidden"></p>
+        </div>
+    </div>
+
+    <!-- Elemento de Video (Oculto) -->
+    <video id="videoElement" crossorigin="anonymous" playsinline style="display:none;">
+        <source src="https://raw.githubusercontent.com/RA8155/STYLIA/main/Armarioabierto%20STYLIA.mp4" type="video/mp4">
+        Tu navegador no soporta el tag de video.
+    </video>
+
+    <script>
+        // Variables globales
+        let camera, scene, renderer, controls;
+        const container = document.getElementById('container');
+        const video = document.getElementById('videoElement');
+        const overlay = document.getElementById('overlay');
+        const playButton = document.getElementById('playButton');
+        const errorMsg = document.getElementById('errorMsg');
+        const imageOverlay = document.getElementById('image-overlay'); // Referencia al nuevo elemento
+
+        // Función para inicializar la escena 3D y el visor
+        function init() {
+            // 1. Configuración de la Escena
+            scene = new THREE.Scene();
+
+            // 2. Configuración de la Cámara
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1100);
+            camera.target = new THREE.Vector3(0, 0, 0); 
+            camera.position.set(0.1, 0, 0);
+
+            // 3. Configuración del Renderizador
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            container.appendChild(renderer.domElement);
+
+            // 4. Configuración de Controles (OrbitControls)
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true; 
+            controls.dampingFactor = 0.05;
+            controls.enableZoom = false; 
+            controls.enablePan = false; 
+
+            // Manejadores de eventos para el redimensionamiento de la ventana
+            window.addEventListener('resize', onWindowResize, false);
+            
+            // Cambia el cursor al arrastrar
+            renderer.domElement.addEventListener('mousedown', () => {
+                renderer.domElement.classList.add('grabbing');
+            });
+            renderer.domElement.addEventListener('mouseup', () => {
+                renderer.domElement.classList.remove('grabbing');
+            });
+        }
+
+        // Función de manejo de redimensionamiento
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Función para crear la textura de video y la esfera
+        function createVideoSphere() {
+            // Crea una textura a partir del elemento de video
+            const texture = new THREE.VideoTexture(video);
+            texture.minFilter = THREE.LinearFilter;
+            texture.magFilter = THREE.LinearFilter;
+            texture.format = THREE.RGBAFormat;
+            
+            // Crea la geometría de la esfera
+            const geometry = new THREE.SphereGeometry(500, 60, 40);
+            
+            // Invertimos las caras (escala en X: -1) para ver la textura desde el interior.
+            geometry.scale(-1, 1, 1);
+            
+            // Crea el material usando la textura del video
+            const material = new THREE.MeshBasicMaterial({ map: texture });
+
+            // Crea la malla y la añade a la escena
+            const mesh = new THREE.Mesh(geometry, material);
+            scene.add(mesh);
+        }
+
+        // Bucle de animación
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Función para manejar el inicio del video y la experiencia
+        playButton.addEventListener('click', async () => {
+            try {
+                // 1. Inicializar la escena y la esfera
+                init();
+                createVideoSphere();
+                
+                // 2. Intentar iniciar la reproducción del video (necesita interacción del usuario)
+                await video.play();
+                
+                // 3. Ocultar el overlay y mostrar el visor y el logo
+                overlay.style.opacity = '0';
+                imageOverlay.style.opacity = '1';
+                imageOverlay.style.pointerEvents = 'auto';
+
+                // 4. Esperar a que la transición termine y ocultar el overlay completamente
+                setTimeout(() => overlay.style.display = 'none', 500);
+
+                // 5. Comenzar el bucle de animación
+                animate();
+
+            } catch (err) {
+                // Muestra un mensaje de error si la reproducción falla
+                console.error("Error al iniciar el video:", err);
+                errorMsg.textContent = "Error al intentar reproducir el video. Esto puede ser un problema de CORS o la URL del video no es RAW. Asegúrate de que estás usando la URL RAW de GitHub (raw.githubusercontent.com).";
+                errorMsg.classList.remove('hidden');
+            }
+        });
+
+        // Simula la inicialización de la interfaz básica antes de la carga del video
+        window.onload = function() {
+            // No se inicializa Three.js hasta que el usuario hace clic.
+        };
+    </script>
+</body>
+</html>
